@@ -1,4 +1,4 @@
-name: some issue 0000
+name: nim-chronos issue 255
 
 on: [pull_request, push]
 
@@ -79,7 +79,7 @@ jobs:
           make -j${NPROC} NIMFLAGS="--parallelBuild:${NPROC}" V=1 update
           make -j${NPROC} NIMFLAGS="--parallelBuild:${NPROC}" V=1 deps
 
-      - name: Build and run module for issue
+      - name: Build and run module for nim-chronos issue 255
         run: |
           # use `llvm-ar` instead of `ar` on macOS as a workaround for:
           # https://github.com/nim-lang/Nim/issues/15589
@@ -88,4 +88,4 @@ jobs:
             ln -f -s /usr/local/Cellar/llvm/*/bin/llvm-ar "${HOME}/.local/bin/ar"
             export PATH="${HOME}/.local/bin:${PATH}"
           fi
-          # ./env.sh nim c -r --out:build/[dep]_[issue-num] issues/[module].nim
+          ./env.sh nim c -r --out:build/chronos_255 issues/chronos_255.nim
