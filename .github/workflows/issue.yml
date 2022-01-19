@@ -1,0 +1,91 @@
+name: some issue 0000
+
+on: [pull_request, push]
+
+jobs:
+  issue:
+    env:
+      NPROC: 2
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - {
+            icon: 🏁,
+            os: windows,
+            shell: msys2
+          }
+          - {
+            icon: 🍎,
+            os: macos,
+            shell: bash --noprofile --norc -eo pipefail
+          }
+          - {
+            icon: 🐧,
+            os: ubuntu,
+            shell: bash --noprofile --norc -eo pipefail
+          }
+    name: ${{ matrix.platform.icon }} ${{ matrix.platform.os }}
+    runs-on: ${{ matrix.platform.os }}-latest
+    defaults:
+      run:
+        shell: ${{ matrix.platform.shell }} {0}
+
+    steps:
+      - name: Install tools and libraries via APT (Linux)
+        if: matrix.platform.os == 'ubuntu'
+        run: |
+          sudo apt update
+          sudo apt upgrade -y
+
+      - name: Install tools and libraries via Homebrew (macOS)
+        if: matrix.platform.os == 'macos'
+        run: |
+          brew update
+          brew upgrade
+          brew install \
+            coreutils \
+            gawk
+
+      - name: Install tools and libraries via MSYS2 (Windows)
+        uses: msys2/setup-msys2@v2
+        if: matrix.platform.os == 'windows'
+        with:
+          msystem: UCRT64
+          update: true
+          install: >
+            base-devel
+            git
+            mingw-w64-ucrt-x86_64-toolchain
+
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Calculate cache key from submodules tree
+        id: calc-cache-key
+        run: |
+          echo "::set-output name=hash::$(git submodule foreach --quiet --recursive 'git rev-parse $(git rev-parse --abbrev-ref HEAD)' | sha1sum | awk '{print $1}')"
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            vendor/nimbus-build-system/vendor/Nim/bin
+          key: ${{ matrix.platform.os }}-${{ steps.calc-cache-key.outputs.hash }}
+
+      - name: Install and build dependencies
+        run: |
+          make -j${NPROC} NIMFLAGS="--parallelBuild:${NPROC}" V=1 update
+          make -j${NPROC} NIMFLAGS="--parallelBuild:${NPROC}" V=1 deps
+
+      - name: Build and run module for issue
+        run: |
+          # use `llvm-ar` instead of `ar` on macOS as a workaround for:
+          # https://github.com/nim-lang/Nim/issues/15589
+          if [[ ${{ matrix.platform.os }} = macos ]]; then
+            mkdir -p "${HOME}/.local/bin"
+            ln -f -s /usr/local/Cellar/llvm/*/bin/llvm-ar "${HOME}/.local/bin/ar"
+            export PATH="${HOME}/.local/bin:${PATH}"
+          fi
+          # ./env.sh nim c -r --out:build/[dep]_[issue-num] issues/[module].nim
